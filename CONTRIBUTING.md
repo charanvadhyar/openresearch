@@ -1,4 +1,4 @@
-# Contributing to AutoResearch
+# Contributing to OpenResearch
 
 AutoResearch exists for researchers who were told they didn't have the
 resources to do research. If that resonates with you, we'd love your help.
