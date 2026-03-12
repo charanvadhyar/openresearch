@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.so
+*.egg-info/
+.eggs/
+
+# Virtual env
+.venv/
+venv/
+
+# Test/cache
+.pytest_cache/
+pytest-cache-*/
+
+# IDE
+.vscode/
+.idea/
+
+# Local outputs
+# Generated artifacts, reports, logs, and memory store
+digit_output/
+autoresearch_memory/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tooling state
+.zencoder/
+.zenflow/

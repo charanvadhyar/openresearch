@@ -1,0 +1,98 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": ["# {{ method_name }} (NLP)\n\n**Why:** {{ why_chosen }}\n\n**Watch out for:** {{ watch_out_for }}"]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import os, json, time, warnings\n",
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "from pathlib import Path\n",
+    "warnings.filterwarnings('ignore')\n",
+    "\n",
+    "{% for imp in additional_imports %}{{ imp }}\n{% endfor %}\n",
+    "\n",
+    "OUTPUT_DIR   = Path('/kaggle/working')\n",
+    "OUTPUT_DIR.mkdir(exist_ok=True)\n",
+    "RUN_START    = time.time()\n",
+    "TARGET_COL   = '{{ target_col }}'\n",
+    "TEXT_COL     = '{{ text_col | default('text') }}'\n",
+    "METHOD_NAME  = '{{ method_name }}'\n",
+    "N_FOLDS      = {{ n_folds | default(5) }}\n",
+    "N_TRIALS     = {{ n_trials | default(20) }}\n",
+    "RANDOM_STATE = 42\n",
+    "print(f'Text col: {TEXT_COL} | Target: {TARGET_COL}')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Load data\n",
+    "data_path = None\n",
+    "for root, dirs, files in os.walk('/kaggle/input'):\n",
+    "    for f in files:\n",
+    "        if f.endswith('.csv'): data_path = os.path.join(root, f); break\n",
+    "    if data_path: break\n",
+    "df = pd.read_csv(data_path)\n",
+    "# Auto-detect text column if not specified\n",
+    "if TEXT_COL not in df.columns:\n",
+    "    text_candidates = df.select_dtypes(include='object').columns\n",
+    "    TEXT_COL = max(text_candidates, key=lambda c: df[c].str.len().mean())\n",
+    "    print(f'Auto-detected text column: {TEXT_COL}')\n",
+    "print(f'{df.shape[0]:,} rows | Classes: {df[TARGET_COL].nunique()}')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# NLP feature engineering + model\n",
+    "{{ model_training_code }}\n",
+    "print('✓ Training complete')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "{{ evaluation_code }}\n",
+    "runtime_seconds = time.time() - RUN_START"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import joblib\n",
+    "metrics = {'method': METHOD_NAME, 'primary_metric': '{{ primary_metric }}',\n",
+    "           'primary_value': float(primary_metric_value),\n",
+    "           'all_metrics': {k: float(v) for k, v in all_metrics.items()},\n",
+    "           'train_metric': float(train_metric) if train_metric is not None else None,\n",
+    "           'val_metric': float(val_metric) if val_metric is not None else None,\n",
+    "           'runtime_seconds': float(runtime_seconds)}\n",
+    "with open(OUTPUT_DIR / 'metrics.json', 'w') as f: json.dump(metrics, f, indent=2)\n",
+    "joblib.dump(best_model, OUTPUT_DIR / 'model.pkl')\n",
+    "print(f'✅ {metrics[\"primary_metric\"]}: {primary_metric_value:.4f}')"
+   ]
+  }
+ ],
+ "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}, "language_info": {"name": "python", "version": "3.10.0"}},
+ "nbformat": 4,
+ "nbformat_minor": 4
+}

@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AutoResearch Example: Heart Disease Prediction
+#
+# This is a complete, runnable example using the UCI Heart Disease dataset
+# available on Kaggle at: https://www.kaggle.com/datasets/ronitf/heart-disease-uci
+#
+# What it does:
+#   Predicts whether a patient has heart disease based on 13 cardiac features
+#   (age, cholesterol, blood pressure, etc.)
+#
+# Expected runtime: ~45 minutes
+# Expected API cost: ~$1.20
+# Best result: ~0.87 AUC-ROC (XGBoost or Random Forest)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+api_keys:
+  anthropic: ""         # ← Fill in your key: https://console.anthropic.com
+  kaggle_username: ""   # ← Fill in your Kaggle username
+  kaggle_key: ""        # ← Fill in your Kaggle API key
+  huggingface: ""       # Not needed for this example
+
+
+problem:
+  statement: >
+    I want to predict whether a patient has heart disease based on 13 clinical
+    measurements including age, sex, chest pain type, resting blood pressure,
+    cholesterol, fasting blood sugar, resting ECG results, max heart rate,
+    exercise-induced angina, ST depression, ST slope, number of major vessels,
+    and thalassemia type. The model will be used by cardiologists, so I need
+    it to be interpretable — doctors must understand why the model made a
+    prediction before they can act on it.
+
+  data_source:
+    type: "kaggle"
+    identifier: "ronitf/heart-disease-uci"
+    description: "UCI Heart Disease dataset — 303 patients, 13 features, binary target"
+
+
+methods:
+  max_methods: 3
+  task_type_override: ""   # Leave empty — AutoResearch will detect "classification"
+
+
+evaluation_weights:
+  # Interpretability weighted higher because of the clinical constraint
+  performance:      0.35
+  speed:            0.15
+  interpretability: 0.30   # ← Higher than default — doctors need explanations
+  robustness:       0.20
+
+
+kaggle:
+  enable_gpu: false          # Not needed — all methods here are CPU-based
+  max_runtime_hours: 2       # Conservative — these are fast methods
+  enable_internet: true
+
+
+output:
+  directory: "./heart_disease_output"
+  paper_formats:
+    docx: true
+    latex: false
+    pdf: false
+
+
+advanced:
+  confidence_threshold: 0.80
+  max_retries: 2
+  llm_model: "claude-sonnet-4-20250514"
+  verbose: true

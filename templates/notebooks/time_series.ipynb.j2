@@ -1,0 +1,104 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": ["# {{ method_name }} (Time Series)\n\n**Why:** {{ why_chosen }}\n\n**Watch out for:** {{ watch_out_for }}"]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import os, json, time, warnings\n",
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "from pathlib import Path\n",
+    "warnings.filterwarnings('ignore')\n",
+    "{% for imp in additional_imports %}{{ imp }}\n{% endfor %}\n",
+    "\n",
+    "OUTPUT_DIR   = Path('/kaggle/working')\n",
+    "OUTPUT_DIR.mkdir(exist_ok=True)\n",
+    "RUN_START    = time.time()\n",
+    "TARGET_COL   = '{{ target_col }}'\n",
+    "DATE_COL     = '{{ date_col | default('date') }}'\n",
+    "FORECAST_H   = {{ forecast_horizon | default(30) }}  # Steps to forecast ahead\n",
+    "METHOD_NAME  = '{{ method_name }}'\n",
+    "N_TRIALS     = {{ n_trials | default(20) }}\n",
+    "RANDOM_STATE = 42\n",
+    "print(f'Target: {TARGET_COL} | Horizon: {FORECAST_H} | Method: {METHOD_NAME}')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Load and prepare time series data\n",
+    "data_path = None\n",
+    "for root, dirs, files in os.walk('/kaggle/input'):\n",
+    "    for f in files:\n",
+    "        if f.endswith('.csv'): data_path = os.path.join(root, f); break\n",
+    "    if data_path: break\n",
+    "df = pd.read_csv(data_path)\n",
+    "\n",
+    "# Parse date column\n",
+    "if DATE_COL in df.columns:\n",
+    "    df[DATE_COL] = pd.to_datetime(df[DATE_COL])\n",
+    "    df = df.sort_values(DATE_COL)\n",
+    "    print(f'Date range: {df[DATE_COL].min()} → {df[DATE_COL].max()}')\n",
+    "print(f'{df.shape[0]:,} time points | Target: {TARGET_COL}')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Time series model training\n",
+    "# Time-aware train/test split — NEVER shuffle time series data\n",
+    "split_idx    = int(len(df) * 0.8)\n",
+    "train_df     = df.iloc[:split_idx]\n",
+    "test_df      = df.iloc[split_idx:]\n",
+    "print(f'Train: {len(train_df)} | Test: {len(test_df)}')\n",
+    "\n",
+    "{{ model_training_code }}\n",
+    "print('✓ Training complete')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "{{ evaluation_code }}\n",
+    "runtime_seconds = time.time() - RUN_START"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import joblib\n",
+    "metrics = {'method': METHOD_NAME, 'primary_metric': '{{ primary_metric }}',\n",
+    "           'primary_value': float(primary_metric_value),\n",
+    "           'all_metrics': {k: float(v) for k, v in all_metrics.items()},\n",
+    "           'train_metric': float(train_metric) if train_metric is not None else None,\n",
+    "           'val_metric': float(val_metric) if val_metric is not None else None,\n",
+    "           'runtime_seconds': float(runtime_seconds)}\n",
+    "with open(OUTPUT_DIR / 'metrics.json', 'w') as f: json.dump(metrics, f, indent=2)\n",
+    "joblib.dump(best_model, OUTPUT_DIR / 'model.pkl')\n",
+    "print(f'✅ {metrics[\"primary_metric\"]}: {primary_metric_value:.4f}')"
+   ]
+  }
+ ],
+ "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}, "language_info": {"name": "python", "version": "3.10.0"}},
+ "nbformat": 4,
+ "nbformat_minor": 4
+}

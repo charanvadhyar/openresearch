@@ -1,0 +1,74 @@
+name: AutoResearch CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint with ruff
+        run: ruff check autoresearch/ --select E,F,I,N,W
+
+      - name: Run unit tests (no API keys needed)
+        run: |
+          pytest tests/ -v \
+            -m "not integration and not slow" \
+            --tb=short \
+            --cov=autoresearch \
+            --cov-report=term-missing \
+            --cov-fail-under=60
+
+      - name: Validate knowledge base
+        run: |
+          python -c "
+          import json
+          from pathlib import Path
+          kb = json.loads(Path('knowledge_base/ml_methods.json').read_text())
+          tasks = ['classification', 'regression', 'nlp', 'computer_vision', 'time_series', 'clustering']
+          for t in tasks:
+              assert t in kb, f'Missing: {t}'
+          total = sum(len(v) for v in kb.values())
+          print(f'Knowledge base OK: {total} methods across {len(kb)} task types')
+          "
+
+      - name: Validate schema imports
+        run: |
+          python -c "
+          from autoresearch.schemas import (
+              ProblemSpec, DataHealthReport, MethodsCatalog,
+              ExecutionResult, EvaluationReport
+          )
+          from autoresearch.orchestrator.state import GlobalState, Stage
+          print('All schema imports OK')
+          "
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install ruff
+      - run: ruff check autoresearch/ --output-format=github

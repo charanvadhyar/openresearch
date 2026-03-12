@@ -1,0 +1,151 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AutoResearch Configuration
+#
+# This is the only file you need to edit before running.
+# Every setting has a plain English explanation.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# ── API Keys ──────────────────────────────────────────────────────────────────
+# These stay on your machine. Never shared with anyone.
+# Get your Anthropic key at: https://console.anthropic.com
+# Get your Kaggle token at:  https://www.kaggle.com/settings → API → Create Token
+
+api_keys:
+  anthropic: ""         # Anthropic Claude key
+  openai: ""            # OpenAI key (only needed if llm_provider is "openai")
+  kaggle_username: ""   # Required. Your Kaggle username.
+  kaggle_key: ""        # Required. Your Kaggle API key.
+  huggingface: ""       # Optional. Only needed if using HuggingFace datasets.
+
+
+# ── Your Problem ──────────────────────────────────────────────────────────────
+
+problem:
+  
+  statement: "Classify iris plants into three species in this classic dataset"
+
+  # Where is your data? Choose one:
+  # - kaggle:       "competition/titanic" or "dataset/username/dataset-name"
+  # - gdrive:       "https://drive.google.com/file/d/FILE_ID/view"
+  # - huggingface:  "dataset-name" (e.g. "imdb", "squad")
+  # - csv:          "/path/to/your/file.csv"
+  data_source:
+    type: ""
+    identifier: ""
+    description: ""  # Plain English: what is this data?
+
+
+# ── Method Selection ──────────────────────────────────────────────────────────
+
+methods:
+  # How many candidate methods to try? More = better coverage, more Kaggle quota used.
+  # Recommended: 3 (balanced). Max: 5.
+  max_methods: 5
+
+  # Override the auto-detected task type if AutoResearch got it wrong.
+  # Options: classification, regression, nlp, computer_vision, time_series, clustering
+  # Leave empty to let AutoResearch decide.
+  task_type_override: ""
+
+
+# ── Evaluation Weights ────────────────────────────────────────────────────────
+# How should AutoResearch pick the "best" method?
+# Adjust these based on what matters most for your research.
+# All weights must sum to 1.0.
+
+evaluation_weights:
+  performance:      0.40  # Raw metric score (AUC, RMSE, etc.)
+  speed:            0.20  # How fast does it train?
+  interpretability: 0.20  # Can you explain why it made a prediction?
+  robustness:       0.20  # Is it stable across different data splits?
+
+
+# ── Kaggle Settings ───────────────────────────────────────────────────────────
+
+kaggle:
+  # Enable GPU for deep learning tasks?
+  # AutoResearch will only use GPU when needed (CV, NLP transformers, deep LSTM).
+  # GPU uses your free 30hr/week Kaggle quota. CPU is unlimited.
+  enable_gpu: true   # Set to false to always use CPU (slower but saves quota)
+
+  # Maximum runtime per kernel (Kaggle's hard limit is 12 hours).
+  # Most ML tasks finish in under 2 hours.
+  max_runtime_hours: 4
+
+  # Enable internet in kernels? Required to download HuggingFace models.
+  enable_internet: true
+
+
+# ── Output ────────────────────────────────────────────────────────────────────
+
+output:
+  # Where to save your Research Starter Pack
+  directory: "./autoresearch_output"
+
+  # Which formats to generate for the paper draft
+  paper_formats:
+    docx:  true   # Microsoft Word — easiest to edit
+    latex: true   # For journal/conference submission
+    pdf:   false  # Requires LaTeX installation
+
+
+# ── Advanced ──────────────────────────────────────────────────────────────────
+# You probably don't need to change these.
+
+advanced:
+  # Confidence threshold for problem analysis.
+  # Below this, AutoResearch pauses and asks you to confirm its understanding.
+  confidence_threshold: 0.80
+
+  # Maximum retries if a Kaggle kernel fails
+  max_retries: 4
+
+  # ── LLM provider chain ──────────────────────────────────────────────────────
+  # Comma-separated list of providers. Tried left-to-right; falls back to the
+  # next one when the current provider hits a rate limit.
+  # Supported providers: anthropic, openai
+  #
+  # llm_provider and llm_model must have the same number of entries.
+  # Each entry N in llm_provider pairs with entry N in llm_model.
+  #
+  # ── Available models ─────────────────────────────────────────────────────────
+  # Anthropic:
+  #   claude-opus-4-20250514          — most capable, slowest, highest cost
+  #   claude-sonnet-4-20250514        — balanced (recommended default)
+  #   claude-haiku-4-5-20251001       — fastest, cheapest
+  #
+  # OpenAI (use any model ID the OpenAI API accepts):
+  #   gpt-4.5-preview                 — most capable GPT
+  #   gpt-4.1                         — strong general model
+  #   gpt-4.1-mini                    — fast, cost-effective
+  #   gpt-4.1-nano                    — fastest, cheapest
+  #   gpt-4o                          — balanced
+  #   gpt-4o-mini                     — small/fast
+  #   o3-mini                         — reasoning model
+  #   o1                              — deep reasoning
+  #
+  # ── Examples ─────────────────────────────────────────────────────────────────
+  # Single model:
+  #   llm_provider: "anthropic"
+  #   llm_model:    "claude-opus-4-20250514"
+  #
+  # Fallback chain — Opus → Haiku → GPT-4.1 → GPT-4.1-mini:
+  #   llm_provider: "anthropic, anthropic, openai, openai"
+  #   llm_model:    "claude-opus-4-20250514, claude-haiku-4-5-20251001, gpt-4.1, gpt-4.1-mini"
+  #
+  # Auto-discover — fetch all models from the provider at startup and use them
+  # as a fallback chain (best model first):
+  #   llm_provider: "anthropic"
+  #   llm_model:    "auto"
+  #
+  # Auto-discover both providers:
+  #   llm_provider: "anthropic, openai"
+  #   llm_model:    "auto, auto"
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  llm_provider: "openai"
+  llm_model:    "gpt-5"
+
+  # Show detailed progress? Recommended for first-time users.
+  verbose: true

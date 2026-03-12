@@ -1,0 +1,105 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": ["# {{ method_name }} (Computer Vision)\n\n**Why:** {{ why_chosen }}\n\n**Watch out for:** {{ watch_out_for }}"]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import os, json, time, warnings\n",
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "from pathlib import Path\n",
+    "warnings.filterwarnings('ignore')\n",
+    "\n",
+    "{% for imp in additional_imports %}{{ imp }}\n{% endfor %}\n",
+    "\n",
+    "OUTPUT_DIR   = Path('/kaggle/working')\n",
+    "OUTPUT_DIR.mkdir(exist_ok=True)\n",
+    "RUN_START    = time.time()\n",
+    "TARGET_COL   = '{{ target_col }}'\n",
+    "IMG_SIZE     = {{ img_size | default(224) }}\n",
+    "BATCH_SIZE   = {{ batch_size | default(32) }}\n",
+    "NUM_EPOCHS   = {{ num_epochs | default(15) }}\n",
+    "METHOD_NAME  = '{{ method_name }}'\n",
+    "RANDOM_STATE = 42\n",
+    "\n",
+    "# GPU check\n",
+    "import torch\n",
+    "device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')\n",
+    "print(f'Device: {device} | Image size: {IMG_SIZE}×{IMG_SIZE} | Batch: {BATCH_SIZE}')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Find image directory and labels CSV\n",
+    "import glob\n",
+    "image_dirs = glob.glob('/kaggle/input/**/*.jpg', recursive=True)[:5]\n",
+    "print(f'Found images, e.g.: {image_dirs[:2]}')\n",
+    "\n",
+    "# Load labels\n",
+    "label_path = None\n",
+    "for root, dirs, files in os.walk('/kaggle/input'):\n",
+    "    for f in files:\n",
+    "        if f.endswith('.csv'):\n",
+    "            label_path = os.path.join(root, f)\n",
+    "            break\n",
+    "    if label_path: break\n",
+    "\n",
+    "df = pd.read_csv(label_path)\n",
+    "print(f'Labels: {df.shape[0]:,} rows | Classes: {df[TARGET_COL].nunique()}')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Transfer learning model + data augmentation\n",
+    "{{ model_training_code }}\n",
+    "print('✓ Training complete')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "{{ evaluation_code }}\n",
+    "runtime_seconds = time.time() - RUN_START"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import torch\n",
+    "metrics = {'method': METHOD_NAME, 'primary_metric': '{{ primary_metric }}',\n",
+    "           'primary_value': float(primary_metric_value),\n",
+    "           'all_metrics': {k: float(v) for k, v in all_metrics.items()},\n",
+    "           'train_metric': float(train_metric) if train_metric is not None else None,\n",
+    "           'val_metric': float(val_metric) if val_metric is not None else None,\n",
+    "           'runtime_seconds': float(runtime_seconds)}\n",
+    "with open(OUTPUT_DIR / 'metrics.json', 'w') as f: json.dump(metrics, f, indent=2)\n",
+    "torch.save(best_model.state_dict(), OUTPUT_DIR / 'model.pt')\n",
+    "print(f'✅ {metrics[\"primary_metric\"]}: {primary_metric_value:.4f}')"
+   ]
+  }
+ ],
+ "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}, "language_info": {"name": "python", "version": "3.10.0"}},
+ "nbformat": 4,
+ "nbformat_minor": 4
+}

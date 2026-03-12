@@ -1,0 +1,550 @@
+{
+  "classification": [
+    {
+      "id": "logistic_regression",
+      "name": "Logistic Regression",
+      "family": "Linear",
+      "requires_gpu": false,
+      "min_rows": 100,
+      "max_rows": 500000,
+      "strengths": [
+        "Extremely interpretable — you can see exactly which features drive predictions",
+        "Fast to train, even on large datasets",
+        "Works well when the relationship between features and target is roughly linear",
+        "Outputs probabilities that are well-calibrated"
+      ],
+      "weaknesses": [
+        "Struggles with complex non-linear patterns",
+        "Needs feature scaling (StandardScaler) to work properly",
+        "Sensitive to outliers in features"
+      ],
+      "good_when": [
+        "interpretability is a hard constraint",
+        "dataset is small (under 5000 rows)",
+        "features are mostly numeric and scaled",
+        "you need a fast baseline"
+      ],
+      "bad_when": [
+        "features have strong non-linear interactions",
+        "dataset has many categorical features",
+        "target classes are highly imbalanced"
+      ],
+      "hyperparam_space": {
+        "C": [0.001, 100.0],
+        "solver": ["lbfgs", "liblinear"],
+        "max_iter": [100, 1000]
+      },
+      "feature_engineering": ["StandardScaler", "SimpleImputer(median)", "OneHotEncoder"],
+      "complexity": "low",
+      "estimated_runtime_minutes": 1
+    },
+    {
+      "id": "random_forest",
+      "name": "Random Forest",
+      "family": "Ensemble (Bagging)",
+      "requires_gpu": false,
+      "min_rows": 200,
+      "max_rows": 1000000,
+      "strengths": [
+        "Handles mixed numeric and categorical features well",
+        "Robust to outliers",
+        "Naturally handles missing values (with imputation)",
+        "Feature importances are easy to extract and explain",
+        "Rarely overfits badly"
+      ],
+      "weaknesses": [
+        "Slower than XGBoost on large datasets",
+        "Less accurate than gradient boosting on tabular data",
+        "Model files can be large"
+      ],
+      "good_when": [
+        "you want a reliable, low-drama baseline",
+        "dataset has mixed feature types",
+        "interpretability matters (feature importances)",
+        "dataset is medium sized (1k–500k rows)"
+      ],
+      "bad_when": [
+        "dataset is very large (>1M rows) — use LightGBM instead",
+        "inference speed is critical"
+      ],
+      "hyperparam_space": {
+        "n_estimators": [100, 500],
+        "max_depth": [3, 20],
+        "min_samples_leaf": [1, 10],
+        "max_features": ["sqrt", "log2"]
+      },
+      "feature_engineering": ["SimpleImputer(median)", "OrdinalEncoder"],
+      "complexity": "medium",
+      "estimated_runtime_minutes": 5
+    },
+    {
+      "id": "xgboost",
+      "name": "XGBoost",
+      "family": "Gradient Boosting",
+      "requires_gpu": false,
+      "min_rows": 500,
+      "max_rows": 5000000,
+      "strengths": [
+        "State-of-the-art on tabular data — wins most Kaggle tabular competitions",
+        "Handles missing values natively",
+        "Fast with built-in parallelism",
+        "Built-in regularization reduces overfitting"
+      ],
+      "weaknesses": [
+        "More hyperparameters than simpler models",
+        "Can overfit on very small datasets (under 1000 rows)",
+        "Less interpretable than linear models (use SHAP for explanations)"
+      ],
+      "good_when": [
+        "dataset is medium to large (500+ rows)",
+        "maximum predictive performance is the goal",
+        "features are numeric or ordinal encoded",
+        "you have time for hyperparameter tuning"
+      ],
+      "bad_when": [
+        "dataset is very small (under 300 rows) — risk of overfitting",
+        "interpretability is a hard constraint without SHAP"
+      ],
+      "hyperparam_space": {
+        "n_estimators": [100, 1000],
+        "max_depth": [3, 9],
+        "learning_rate": [0.01, 0.3],
+        "subsample": [0.6, 1.0],
+        "colsample_bytree": [0.6, 1.0],
+        "reg_alpha": [0, 1.0],
+        "reg_lambda": [1.0, 10.0]
+      },
+      "feature_engineering": ["SimpleImputer(median)", "OrdinalEncoder"],
+      "complexity": "medium",
+      "estimated_runtime_minutes": 10
+    },
+    {
+      "id": "lightgbm",
+      "name": "LightGBM",
+      "family": "Gradient Boosting",
+      "requires_gpu": false,
+      "min_rows": 1000,
+      "max_rows": 100000000,
+      "strengths": [
+        "Fastest gradient boosting — handles millions of rows",
+        "Memory efficient",
+        "Handles categorical features natively (no encoding needed)",
+        "Often matches or beats XGBoost with less tuning"
+      ],
+      "weaknesses": [
+        "Can overfit on small datasets more than XGBoost",
+        "Less battle-tested than XGBoost in the literature"
+      ],
+      "good_when": [
+        "dataset is large (10k+ rows)",
+        "you have many categorical features",
+        "training speed matters",
+        "memory is limited"
+      ],
+      "bad_when": [
+        "dataset is small (under 1000 rows)"
+      ],
+      "hyperparam_space": {
+        "n_estimators": [100, 1000],
+        "num_leaves": [20, 300],
+        "learning_rate": [0.01, 0.3],
+        "min_child_samples": [5, 100],
+        "subsample": [0.6, 1.0],
+        "colsample_bytree": [0.6, 1.0]
+      },
+      "feature_engineering": ["SimpleImputer(median)"],
+      "complexity": "medium",
+      "estimated_runtime_minutes": 5
+    },
+    {
+      "id": "tabnet",
+      "name": "TabNet",
+      "family": "Neural Network (Attention)",
+      "requires_gpu": true,
+      "min_rows": 10000,
+      "max_rows": 10000000,
+      "strengths": [
+        "Neural network designed specifically for tabular data",
+        "Built-in feature selection via attention",
+        "Can learn complex non-linear patterns",
+        "More interpretable than standard deep learning"
+      ],
+      "weaknesses": [
+        "Needs a lot of data (10k+ rows minimum)",
+        "Slow to train without GPU",
+        "Rarely beats XGBoost/LightGBM on small-medium datasets"
+      ],
+      "good_when": [
+        "dataset is large (10k+ rows)",
+        "you want a neural approach for tabular data",
+        "GPU is available"
+      ],
+      "bad_when": [
+        "dataset is small",
+        "no GPU available",
+        "training speed matters"
+      ],
+      "hyperparam_space": {
+        "n_d": [8, 64],
+        "n_a": [8, 64],
+        "n_steps": [3, 10],
+        "gamma": [1.0, 2.0],
+        "lr": [0.001, 0.05]
+      },
+      "feature_engineering": ["StandardScaler", "SimpleImputer(median)"],
+      "complexity": "high",
+      "estimated_runtime_minutes": 30
+    }
+  ],
+  "regression": [
+    {
+      "id": "ridge_regression",
+      "name": "Ridge Regression",
+      "family": "Linear",
+      "requires_gpu": false,
+      "min_rows": 100,
+      "max_rows": 1000000,
+      "strengths": [
+        "Highly interpretable — coefficients directly show feature impact",
+        "Fast, works on huge datasets",
+        "Good baseline that's hard to beat when relationships are linear"
+      ],
+      "weaknesses": [
+        "Assumes linear relationships",
+        "Sensitive to feature scale",
+        "Can't capture interactions between features"
+      ],
+      "good_when": ["interpretability is critical", "small dataset", "linear relationships expected"],
+      "bad_when": ["complex non-linear patterns", "many categorical features"],
+      "hyperparam_space": {"alpha": [0.01, 100.0]},
+      "feature_engineering": ["StandardScaler", "SimpleImputer(median)", "PolynomialFeatures(degree=2)"],
+      "complexity": "low",
+      "estimated_runtime_minutes": 1
+    },
+    {
+      "id": "xgboost_regression",
+      "name": "XGBoost Regressor",
+      "family": "Gradient Boosting",
+      "requires_gpu": false,
+      "min_rows": 500,
+      "max_rows": 5000000,
+      "strengths": [
+        "Best-in-class for tabular regression",
+        "Handles outliers better than linear models",
+        "Works with mixed feature types"
+      ],
+      "weaknesses": [
+        "Extrapolates poorly outside training range",
+        "Needs tuning for best results"
+      ],
+      "good_when": ["medium-large dataset", "non-linear relationships", "mixed features"],
+      "bad_when": ["need to predict outside the training range (extrapolation)"],
+      "hyperparam_space": {
+        "n_estimators": [100, 1000],
+        "max_depth": [3, 9],
+        "learning_rate": [0.01, 0.3],
+        "subsample": [0.6, 1.0]
+      },
+      "feature_engineering": ["SimpleImputer(median)", "OrdinalEncoder"],
+      "complexity": "medium",
+      "estimated_runtime_minutes": 10
+    },
+    {
+      "id": "lightgbm_regression",
+      "name": "LightGBM Regressor",
+      "family": "Gradient Boosting",
+      "requires_gpu": false,
+      "min_rows": 1000,
+      "max_rows": 100000000,
+      "strengths": ["Fastest on large datasets", "Handles categoricals natively"],
+      "weaknesses": ["Can overfit on small datasets"],
+      "good_when": ["large dataset", "many categoricals", "speed matters"],
+      "bad_when": ["small dataset"],
+      "hyperparam_space": {
+        "n_estimators": [100, 1000],
+        "num_leaves": [20, 300],
+        "learning_rate": [0.01, 0.3]
+      },
+      "feature_engineering": ["SimpleImputer(median)"],
+      "complexity": "medium",
+      "estimated_runtime_minutes": 5
+    }
+  ],
+  "nlp": [
+    {
+      "id": "tfidf_logreg",
+      "name": "TF-IDF + Logistic Regression",
+      "family": "Classical NLP",
+      "requires_gpu": false,
+      "min_rows": 100,
+      "max_rows": 1000000,
+      "strengths": [
+        "Surprisingly strong baseline for text classification",
+        "Fast — trains in seconds",
+        "Interpretable: you can see which words drive predictions",
+        "Works on CPU, no GPU needed"
+      ],
+      "weaknesses": [
+        "No understanding of word order or context",
+        "Misses semantic meaning (synonym problem)",
+        "Bag-of-words — 'not good' and 'good' look similar"
+      ],
+      "good_when": ["small dataset", "fast baseline needed", "interpretability matters", "topic classification"],
+      "bad_when": ["nuanced language understanding needed", "negation is important", "multilingual text"],
+      "hyperparam_space": {
+        "C": [0.01, 10.0],
+        "max_features": [5000, 100000],
+        "ngram_range": [[1,1], [1,2], [1,3]]
+      },
+      "feature_engineering": ["TfidfVectorizer", "lowercase", "remove_punctuation"],
+      "complexity": "low",
+      "estimated_runtime_minutes": 2
+    },
+    {
+      "id": "distilbert",
+      "name": "DistilBERT Fine-tuning",
+      "family": "Transformer",
+      "requires_gpu": true,
+      "min_rows": 500,
+      "max_rows": 500000,
+      "strengths": [
+        "Understands context and nuance in language",
+        "State-of-the-art on most NLP tasks",
+        "Pretrained on massive text — good even with few examples",
+        "40% smaller and 60% faster than BERT with 97% of the performance"
+      ],
+      "weaknesses": [
+        "Needs GPU for reasonable training time",
+        "Less interpretable than TF-IDF methods",
+        "Expensive in API costs (long prompts)"
+      ],
+      "good_when": ["language nuance matters", "sentiment / intent classification", "GPU available", "500+ training examples"],
+      "bad_when": ["no GPU", "very small dataset (under 100 examples)", "interpretability is critical"],
+      "hyperparam_space": {
+        "learning_rate": [1e-5, 5e-5],
+        "batch_size": [16, 32],
+        "num_epochs": [2, 5],
+        "warmup_ratio": [0.0, 0.1]
+      },
+      "feature_engineering": ["HuggingFace tokenizer (auto)"],
+      "complexity": "high",
+      "estimated_runtime_minutes": 45
+    }
+  ],
+  "computer_vision": [
+    {
+      "id": "efficientnet_transfer",
+      "name": "EfficientNet-B0 Transfer Learning",
+      "family": "CNN (Transfer Learning)",
+      "requires_gpu": true,
+      "min_rows": 200,
+      "max_rows": 10000000,
+      "strengths": [
+        "Pretrained on ImageNet — works even with small datasets",
+        "State-of-the-art accuracy/speed tradeoff",
+        "Much faster to train than from scratch"
+      ],
+      "weaknesses": [
+        "Needs GPU", "Less interpretable than classical methods",
+        "Input images must be resized to 224×224"
+      ],
+      "good_when": ["image classification", "GPU available", "any dataset size"],
+      "bad_when": ["no GPU", "non-standard image sizes critical"],
+      "hyperparam_space": {
+        "learning_rate": [1e-4, 1e-2],
+        "batch_size": [16, 64],
+        "epochs": [10, 30],
+        "unfreeze_layers": [0, 20]
+      },
+      "feature_engineering": ["Resize(224,224)", "Normalize(ImageNet)", "RandomHorizontalFlip", "RandomCrop"],
+      "complexity": "high",
+      "estimated_runtime_minutes": 60
+    },
+    {
+      "id": "resnet50_transfer",
+      "name": "ResNet-50 Transfer Learning",
+      "family": "CNN (Transfer Learning)",
+      "requires_gpu": true,
+      "min_rows": 200,
+      "max_rows": 10000000,
+      "strengths": [
+        "Well-studied architecture with lots of literature",
+        "Strong baseline for medical and scientific imaging",
+        "Good interpretability via Grad-CAM"
+      ],
+      "weaknesses": ["Needs GPU", "Larger model than EfficientNet"],
+      "good_when": ["medical imaging", "scientific images", "literature comparison needed"],
+      "bad_when": ["mobile/edge deployment", "no GPU"],
+      "hyperparam_space": {
+        "learning_rate": [1e-4, 1e-2],
+        "batch_size": [16, 64],
+        "epochs": [10, 30]
+      },
+      "feature_engineering": ["Resize(224,224)", "Normalize(ImageNet)", "Augmentation"],
+      "complexity": "high",
+      "estimated_runtime_minutes": 90
+    }
+  ],
+  "time_series": [
+    {
+      "id": "prophet",
+      "name": "Facebook Prophet",
+      "family": "Additive Model",
+      "requires_gpu": false,
+      "min_rows": 100,
+      "max_rows": 1000000,
+      "strengths": [
+        "Handles seasonality automatically (daily, weekly, yearly)",
+        "Robust to missing values and outliers",
+        "Interpretable components: trend + seasonality + holidays",
+        "Works on CPU, no ML expertise needed to tune"
+      ],
+      "weaknesses": [
+        "Univariate only (one variable at a time)",
+        "Not great at short-term, high-frequency forecasting",
+        "Assumes additive seasonality"
+      ],
+      "good_when": [
+        "daily/weekly/monthly data with clear seasonality",
+        "business forecasting (sales, demand)",
+        "interpretability matters",
+        "missing data in time series"
+      ],
+      "bad_when": [
+        "high-frequency data (minutes, seconds)",
+        "multivariate forecasting needed",
+        "complex non-linear patterns"
+      ],
+      "hyperparam_space": {
+        "changepoint_prior_scale": [0.001, 0.5],
+        "seasonality_prior_scale": [0.01, 10.0],
+        "seasonality_mode": ["additive", "multiplicative"]
+      },
+      "feature_engineering": ["date_column_parsing", "holiday_detection"],
+      "complexity": "low",
+      "estimated_runtime_minutes": 3
+    },
+    {
+      "id": "xgboost_timeseries",
+      "name": "XGBoost with Lag Features",
+      "family": "Gradient Boosting + Feature Engineering",
+      "requires_gpu": false,
+      "min_rows": 500,
+      "max_rows": 5000000,
+      "strengths": [
+        "Powerful for multivariate time series",
+        "Lag features capture temporal patterns",
+        "Handles exogenous variables easily",
+        "Often beats LSTM on small-medium datasets"
+      ],
+      "weaknesses": [
+        "Feature engineering (lags) requires domain knowledge",
+        "Not naturally sequential — needs manual temporal structure"
+      ],
+      "good_when": [
+        "multivariate time series",
+        "exogenous features available",
+        "medium dataset size",
+        "no GPU available"
+      ],
+      "bad_when": ["very long sequences", "purely autoregressive with no features"],
+      "hyperparam_space": {
+        "n_estimators": [100, 500],
+        "max_depth": [3, 7],
+        "learning_rate": [0.01, 0.2],
+        "lag_features": [3, 12]
+      },
+      "feature_engineering": ["lag_features", "rolling_mean", "rolling_std", "date_parts"],
+      "complexity": "medium",
+      "estimated_runtime_minutes": 10
+    },
+    {
+      "id": "lstm_timeseries",
+      "name": "LSTM Neural Network",
+      "family": "Recurrent Neural Network",
+      "requires_gpu": true,
+      "min_rows": 2000,
+      "max_rows": 10000000,
+      "strengths": [
+        "Captures long-range temporal dependencies",
+        "Handles variable-length sequences",
+        "Good for complex patterns that simpler models miss"
+      ],
+      "weaknesses": [
+        "Needs GPU and significant data",
+        "Harder to interpret",
+        "Often outperformed by XGBoost on small datasets"
+      ],
+      "good_when": ["large dataset (2k+ sequences)", "long-range dependencies", "GPU available"],
+      "bad_when": ["small dataset", "no GPU", "interpretability needed"],
+      "hyperparam_space": {
+        "units": [32, 256],
+        "layers": [1, 3],
+        "dropout": [0.0, 0.5],
+        "learning_rate": [0.0001, 0.01],
+        "batch_size": [32, 128]
+      },
+      "feature_engineering": ["MinMaxScaler", "sequence_windowing"],
+      "complexity": "high",
+      "estimated_runtime_minutes": 60
+    }
+  ],
+  "clustering": [
+    {
+      "id": "kmeans",
+      "name": "K-Means Clustering",
+      "family": "Centroid-based",
+      "requires_gpu": false,
+      "min_rows": 100,
+      "max_rows": 10000000,
+      "strengths": [
+        "Simple, fast, and well-understood",
+        "Works well when clusters are roughly spherical",
+        "Easy to explain: 'group similar items together'"
+      ],
+      "weaknesses": [
+        "You must specify the number of clusters (k) upfront",
+        "Sensitive to outliers",
+        "Assumes clusters are spherical and similar size"
+      ],
+      "good_when": ["you have an idea of how many groups exist", "large dataset", "speed matters"],
+      "bad_when": ["clusters have complex shapes", "many outliers", "no idea of k"],
+      "hyperparam_space": {"n_clusters": [2, 15], "init": ["k-means++", "random"]},
+      "feature_engineering": ["StandardScaler", "PCA(optional)"],
+      "complexity": "low",
+      "estimated_runtime_minutes": 3
+    },
+    {
+      "id": "hdbscan",
+      "name": "HDBSCAN",
+      "family": "Density-based",
+      "requires_gpu": false,
+      "min_rows": 100,
+      "max_rows": 500000,
+      "strengths": [
+        "Finds clusters of arbitrary shape",
+        "Automatically determines number of clusters",
+        "Handles noise and outliers naturally (labels them as -1)",
+        "More robust than DBSCAN"
+      ],
+      "weaknesses": [
+        "Slower than K-Means on large datasets",
+        "Results can be sensitive to min_cluster_size"
+      ],
+      "good_when": [
+        "you don't know how many clusters exist",
+        "clusters may have irregular shapes",
+        "outlier detection is important"
+      ],
+      "bad_when": ["very large dataset (500k+ rows)", "you know k in advance"],
+      "hyperparam_space": {
+        "min_cluster_size": [5, 100],
+        "min_samples": [1, 20],
+        "cluster_selection_epsilon": [0.0, 1.0]
+      },
+      "feature_engineering": ["StandardScaler", "UMAP(optional)"],
+      "complexity": "medium",
+      "estimated_runtime_minutes": 10
+    }
+  ]
+}
