@@ -252,7 +252,7 @@ def _fetch_live_models(
     (provider, api_key, model_id) tuples.
     """
     entries: list[tuple[str, str, str]] = []
-    for prov in ("anthropic", "openai"):
+    for prov in ("anthropic", "openai", "minimax"):
         api_key = key_map.get(prov, "")
         if not api_key:
             continue
@@ -284,6 +284,7 @@ def _pick_models(config_path: str) -> list[tuple[str, str, str]] | None:
     key_map = {
         "anthropic": api.get("anthropic", ""),
         "openai":    api.get("openai", ""),
+        "minimax":   api.get("minimax", ""),
     }
 
     # ── Live discovery ─────────────────────────────────────────────────────────
@@ -340,7 +341,7 @@ def _pick_models(config_path: str) -> list[tuple[str, str, str]] | None:
             return None
 
         if idx == last + 1:
-            prov = Prompt.ask("  Provider", choices=["anthropic", "openai"], default="anthropic")
+            prov = Prompt.ask("  Provider", choices=["anthropic", "openai", "minimax"], default="anthropic")
             model_id = Prompt.ask("  Model ID (exact API model string)").strip()
             api_key = key_map.get(prov, "")
             if not api_key:
@@ -379,8 +380,8 @@ def _check_config(config_path: str) -> None:
 
     api = cfg.get("api_keys", {})
     missing = []
-    if not api.get("anthropic") and not api.get("openai"):
-        missing.append("api_keys.anthropic  (or api_keys.openai)")
+    if not api.get("anthropic") and not api.get("openai") and not api.get("minimax"):
+        missing.append("api_keys.anthropic  (or api_keys.openai or api_keys.minimax)")
     if not api.get("kaggle_username"):
         missing.append("api_keys.kaggle_username")
     if not api.get("kaggle_key"):
