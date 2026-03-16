@@ -1,5 +1,5 @@
 """
-Unified LLM client — Anthropic Claude or OpenAI, same interface.
+Unified LLM client — Anthropic Claude, OpenAI, or MiniMax, same interface.
 
 Supports a fallback chain: try providers in order, falling back to the next
 one when a rate limit is hit.
@@ -7,11 +7,13 @@ one when a rate limit is hit.
 Single provider:
     llm = LLMClient.single("anthropic", api_key="sk-ant-...", model="claude-sonnet-4-20250514")
     llm = LLMClient.single("openai",    api_key="sk-...",     model="gpt-4o")
+    llm = LLMClient.single("minimax",   api_key="...",        model="MiniMax-M2.5")
 
-Fallback chain (Anthropic → OpenAI):
+Fallback chain (Anthropic → OpenAI → MiniMax):
     llm = LLMClient([
         ("anthropic", "sk-ant-...", "claude-sonnet-4-20250514"),
         ("openai",    "sk-...",     "gpt-4o"),
+        ("minimax",   "...",        "MiniMax-M2.5"),
     ])
 
     text = llm.create(system="...", messages=[...], max_tokens=500)
@@ -48,6 +50,8 @@ _CONTEXT_LIMITS: dict[str, int] = {
     "claude-opus":  160_000,
     "claude-sonnet":160_000,
     "claude-haiku":  80_000,
+    # MiniMax
+    "minimax-m2.5": 163_000,   # 204K context, use ~80%
     # Default fallback
     "_default":      24_000,
 }
@@ -142,7 +146,7 @@ def list_provider_models(provider: str, api_key: str) -> list[str]:
     OpenAI: chat/reasoning models only, newest first).
 
     Args:
-        provider: "anthropic" or "openai"
+        provider: "anthropic", "openai", or "minimax"
         api_key:  API key for that provider
 
     Returns:
@@ -174,8 +178,12 @@ def list_provider_models(provider: str, api_key: str) -> list[str]:
         )
         return ids
 
+    elif provider == "minimax":
+        # MiniMax supports two chat models with 204K context window
+        return ["MiniMax-M2.5", "MiniMax-M2.5-highspeed"]
+
     else:
-        raise ValueError(f"Unknown provider '{provider}'. Use 'anthropic' or 'openai'.")
+        raise ValueError(f"Unknown provider '{provider}'. Use 'anthropic', 'openai', or 'minimax'.")
 
 
 def resolve_models(
@@ -192,7 +200,7 @@ def resolve_models(
     - Otherwise return ``[requested]`` unchanged.
 
     Args:
-        provider:  "anthropic" or "openai"
+        provider:  "anthropic", "openai", or "minimax"
         api_key:   API key
         requested: model name or "auto"
         verbose:   print discovered models
@@ -240,8 +248,15 @@ class _Backend:
             import openai
             self._client         = openai.OpenAI(api_key=api_key)
             self._rate_limit_exc = openai.RateLimitError
+        elif provider == "minimax":
+            import openai as _openai
+            self._client         = _openai.OpenAI(
+                api_key=api_key,
+                base_url="https://api.minimax.io/v1",
+            )
+            self._rate_limit_exc = _openai.RateLimitError
         else:
-            raise ValueError(f"Unknown LLM provider '{provider}'. Use 'anthropic' or 'openai'.")
+            raise ValueError(f"Unknown LLM provider '{provider}'. Use 'anthropic', 'openai', or 'minimax'.")
 
     def call(self, system: str, messages: list[dict], max_tokens: int,
              verbose: bool = False) -> str:
@@ -255,6 +270,8 @@ class _Backend:
             try:
                 if self.provider == "anthropic":
                     return self._call_anthropic(system, messages, max_tokens)
+                elif self.provider == "minimax":
+                    return self._call_minimax(system, messages, max_tokens)
                 else:
                     return self._call_openai(system, messages, max_tokens)
 
@@ -322,6 +339,27 @@ class _Backend:
             )
         return content
 
+    def _call_minimax(self, system: str, messages: list[dict], max_tokens: int) -> str:
+        """Call MiniMax via its OpenAI-compatible API.
+
+        Key differences from vanilla OpenAI:
+        - temperature must be in (0.0, 1.0] — zero is not accepted
+        - uses 'system' role (no 'developer' role)
+        """
+        resp = self._client.chat.completions.create(
+            model=self.model,
+            max_tokens=max_tokens,
+            temperature=1.0,
+            messages=[{"role": "system", "content": system}] + messages,
+        )
+        content = resp.choices[0].message.content
+        if not content:
+            finish = resp.choices[0].finish_reason
+            raise ValueError(
+                f"Model '{self.model}' returned an empty response (finish_reason={finish!r})."
+            )
+        return content
+
 
 # ── Public LLMClient ───────────────────────────────────────────────────────────
 
@@ -335,11 +373,13 @@ class LLMClient:
     Usage:
         # Single provider
         llm = LLMClient.single("anthropic", "sk-ant-...", "claude-sonnet-4-20250514")
+        llm = LLMClient.single("minimax",   "...",        "MiniMax-M2.5")
 
-        # Fallback chain — Anthropic first, OpenAI as backup
+        # Fallback chain — Anthropic first, OpenAI, then MiniMax as backup
         llm = LLMClient([
             ("anthropic", "sk-ant-...", "claude-sonnet-4-20250514"),
             ("openai",    "sk-...",     "gpt-4o"),
+            ("minimax",   "...",        "MiniMax-M2.5"),
         ])
     """
 

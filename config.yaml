@@ -14,6 +14,7 @@
 api_keys:
   anthropic: ""         # Anthropic Claude key
   openai: ""            # OpenAI key (only needed if llm_provider is "openai")
+  minimax: ""           # MiniMax key (only needed if llm_provider is "minimax")
   kaggle_username: ""   # Required. Your Kaggle username.
   kaggle_key: ""        # Required. Your Kaggle API key.
   huggingface: ""       # Optional. Only needed if using HuggingFace datasets.
@@ -104,7 +105,7 @@ advanced:
   # ── LLM provider chain ──────────────────────────────────────────────────────
   # Comma-separated list of providers. Tried left-to-right; falls back to the
   # next one when the current provider hits a rate limit.
-  # Supported providers: anthropic, openai
+  # Supported providers: anthropic, openai, minimax
   #
   # llm_provider and llm_model must have the same number of entries.
   # Each entry N in llm_provider pairs with entry N in llm_model.
@@ -125,6 +126,10 @@ advanced:
   #   o3-mini                         — reasoning model
   #   o1                              — deep reasoning
   #
+  # MiniMax (https://platform.minimax.io):
+  #   MiniMax-M2.5                    — peak performance, 204K context
+  #   MiniMax-M2.5-highspeed          — same performance, faster
+  #
   # ── Examples ─────────────────────────────────────────────────────────────────
   # Single model:
   #   llm_provider: "anthropic"
@@ -138,6 +143,10 @@ advanced:
   # as a fallback chain (best model first):
   #   llm_provider: "anthropic"
   #   llm_model:    "auto"
+  #
+  # MiniMax provider:
+  #   llm_provider: "minimax"
+  #   llm_model:    "MiniMax-M2.5"
   #
   # Auto-discover both providers:
   #   llm_provider: "anthropic, openai"

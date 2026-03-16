@@ -47,7 +47,7 @@ Problem statement
 
 - Python 3.11+
 - Kaggle account and API token
-- LLM API key (Anthropic or OpenAI)
+- LLM API key (Anthropic, OpenAI, or [MiniMax](https://platform.minimax.io))
 
 ## Quickstart
 
@@ -65,6 +65,7 @@ Edit `config.yaml` and add your keys plus your problem and data source.
 api_keys:
   anthropic: "YOUR_KEY"
   openai: "YOUR_KEY"
+  minimax: "YOUR_KEY"           # optional — https://platform.minimax.io
   kaggle_username: "YOUR_USERNAME"
   kaggle_key: "YOUR_KAGGLE_KEY"
 

@@ -40,6 +40,11 @@ from autoresearch.schemas import (
     RiskFlag,
 )
 from autoresearch.orchestrator.state import GlobalState, Stage, DataSource, TokenUsage
+from autoresearch.agents.api_utils import (
+    list_provider_models,
+    _Backend,
+    _context_limit_for,
+)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -381,6 +386,40 @@ class TestKnowledgeBase:
                 if "neural" in m["family"].lower() or "transformer" in m["family"].lower():
                     assert m["requires_gpu"] is True, \
                         f"Neural method '{m['id']}' should have requires_gpu=True"
+
+
+# ── MiniMax Provider Tests ────────────────────────────────────────────────────
+
+class TestMiniMaxProvider:
+    """Tests for MiniMax provider integration (no API calls)."""
+
+    def test_list_provider_models_returns_both(self):
+        models = list_provider_models("minimax", "dummy-key")
+        assert "MiniMax-M2.5" in models
+        assert "MiniMax-M2.5-highspeed" in models
+        assert len(models) == 2
+
+    def test_context_limit_minimax(self):
+        limit = _context_limit_for("MiniMax-M2.5")
+        assert limit == 163_000
+
+    def test_context_limit_minimax_highspeed(self):
+        limit = _context_limit_for("MiniMax-M2.5-highspeed")
+        assert limit == 163_000
+
+    def test_backend_init_minimax(self):
+        backend = _Backend("minimax", "test-key", "MiniMax-M2.5")
+        assert backend.provider == "minimax"
+        assert backend.model == "MiniMax-M2.5"
+        assert backend._client.base_url.host == "api.minimax.io"
+
+    def test_backend_unknown_provider_raises(self):
+        with pytest.raises(ValueError, match="Unknown LLM provider"):
+            _Backend("unknown_provider", "key", "model")
+
+    def test_list_provider_models_unknown_raises(self):
+        with pytest.raises(ValueError, match="Unknown provider"):
+            list_provider_models("unknown_provider", "key")
 
 
 # ── State Tests ───────────────────────────────────────────────────────────────

@@ -130,6 +130,7 @@ class AutoResearchOrchestrator:
             key_map = {
                 "anthropic": api.get("anthropic", ""),
                 "openai":    api.get("openai", ""),
+                "minimax":   api.get("minimax", ""),
             }
             providers = [p.strip() for p in str(adv.get("llm_provider", "anthropic")).split(",")]
             models    = [m.strip() for m in str(adv.get("llm_model", "claude-sonnet-4-20250514")).split(",")]
