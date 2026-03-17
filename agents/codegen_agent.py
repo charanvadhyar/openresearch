@@ -249,6 +249,23 @@ def build_codegen_prompt(
             f"recommendations={diagnostics.recommendations[:5]}"
         )
 
+    prep = spec.data_prep
+    prep_context = "none"
+    if prep is not None:
+        prep_context = (
+            f"target={prep.target_column}; "
+            f"normalize_column_names={prep.normalize_column_names}; "
+            f"missing_value_columns={prep.missing_value_columns}; "
+            f"high_cardinality_columns={prep.high_cardinality_columns}; "
+            f"leakage_candidates={prep.leakage_candidates}; "
+            f"duplicate_ratio={prep.duplicate_ratio:.3f}; "
+            f"drop_duplicate_rows={prep.drop_duplicate_rows}; "
+            f"impute_numeric={prep.impute_numeric}; "
+            f"impute_categorical={prep.impute_categorical}; "
+            f"stratify_split={prep.stratify_split}; "
+            f"recommendations={prep.recommendations[:5]}"
+        )
+
     return f"""## Method to Implement{error_section}
 
 Name: {method.name}
@@ -262,6 +279,7 @@ Target column: {spec.target_column or "none"}
 Primary metric: {spec.primary_metric.value}
 Dataset: {report.row_count:,} rows Ã— {report.column_count} columns{imbalance_note}
 Diagnostics: {diagnostics_context}
+Data prep guidance: {prep_context}
 
 ## Feature Engineering Steps
 
@@ -497,6 +515,7 @@ class CodeGenAgent:
         section_instruction = self._SECTION_PROMPTS[section]
         error_note = f"\nPrevious attempt failed â€” fix this:\n{error_context}\n" if error_context else ""
         diagnostics = spec.dataset_diagnostics
+        prep = spec.data_prep
         context_note = (
             f"Rows={report.row_count}, Cols={report.column_count}, "
             f"Target={spec.target_column or report.label_column or 'none'}, "
@@ -504,7 +523,8 @@ class CodeGenAgent:
             f"Numeric cols={report.numeric_columns[:12]}, "
             f"Method family={method.algorithm_family}, "
             f"Method hyperparams={method.hyperparam_space}, "
-            f"Diagnostics flags={diagnostics.risk_flags if diagnostics else []}"
+            f"Diagnostics flags={diagnostics.risk_flags if diagnostics else []}, "
+            f"Prep notes={prep.recommendations[:3] if prep else []}"
         )
 
         response_text = self.llm.create(

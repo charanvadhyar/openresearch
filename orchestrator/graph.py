@@ -31,8 +31,10 @@ from autoresearch.schemas import (
 from autoresearch.agents.api_utils import LLMClient, resolve_models
 from autoresearch.agents.problem_analyst import ProblemAnalystAgent
 from autoresearch.agents.eda_agent import EDAAgent
+from autoresearch.agents.data_prep_agent import DataPrepAgent
 from autoresearch.agents.method_formulator import MethodFormulatorAgent
 from autoresearch.agents.dataset_diagnostics import DatasetDiagnostics
+from autoresearch.memory.data_prep_memory import DataPrepMemory
 from autoresearch.agents.codegen_agent import CodeGenAgent
 from autoresearch.agents.executor_agent import ExecutionAgent
 from autoresearch.agents.evaluator_agent import EvaluatorAgent
@@ -85,7 +87,9 @@ class AutoResearchOrchestrator:
 
         # Build all agents
         self.problem_analyst   = ProblemAnalystAgent(llm)
+        self.data_prep_agent   = DataPrepAgent(verbose)
         self.method_formulator = MethodFormulatorAgent(llm, verbose)
+        self.data_prep_memory  = DataPrepMemory()
         self.codegen           = CodeGenAgent(llm, verbose)
         self.evaluator         = EvaluatorAgent(llm, evaluation_weights, verbose)
         self.paper_writer      = PaperWriterAgent(llm, verbose)
@@ -322,6 +326,34 @@ class AutoResearchOrchestrator:
                 DatasetDiagnostics.print_summary(diagnostics)
         except Exception as e:
             logger.warning(f"Dataset diagnostics failed (non-fatal): {e}")
+
+        # Run minimal data prep planning after EDA and diagnostics.
+        try:
+            prep = self.data_prep_agent.prepare(
+                spec=state.problem_spec,
+                report=state.data_health,
+            )
+            state.problem_spec.data_prep = prep
+            state.data_prep = prep
+
+            # Persist DataPrepReport for future runs.
+            dataset_profile = {
+                "dataset_type": self.method_formulator._dataset_type_from_task(state.problem_spec.task_type),
+                "rows": (state.problem_spec.dataset_diagnostics.rows
+                         if state.problem_spec.dataset_diagnostics is not None
+                         else state.data_health.row_count),
+                "columns": (state.problem_spec.dataset_diagnostics.columns
+                            if state.problem_spec.dataset_diagnostics is not None
+                            else state.data_health.column_count),
+            }
+            # Compute signature using ExperimentMemory to keep it consistent.
+            from autoresearch.memory.experiment_memory import ExperimentMemory
+            signature = ExperimentMemory.compute_dataset_signature(
+                dataset_profile, state.problem_spec.task_type.value
+            )
+            self.data_prep_memory.save_report(signature, prep)
+        except Exception as e:
+            logger.warning(f"Data prep planning failed (non-fatal): {e}")
 
         catalog = self.method_formulator.formulate(
             spec=state.problem_spec,

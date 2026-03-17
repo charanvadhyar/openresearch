@@ -5,6 +5,7 @@ from .data_health import (
 )
 from .methods_catalog import MethodSpec, MethodsCatalog, ComplexityLevel
 from .dataset_diagnostics import DatasetDiagnosticsReport
+from .data_prep import DataPrepReport
 from .execution_result import (
     ExecutionResult, ExecutionStatus, ModelArtifact,
     EvaluationReport, MethodScore, RiskFlag, FailedMethodSummary,
@@ -20,6 +21,8 @@ __all__ = [
     "MethodSpec", "MethodsCatalog", "ComplexityLevel",
     # dataset_diagnostics
     "DatasetDiagnosticsReport",
+    # data_prep
+    "DataPrepReport",
     # execution_result
     "ExecutionResult", "ExecutionStatus", "ModelArtifact",
     "EvaluationReport", "MethodScore", "RiskFlag", "FailedMethodSummary",

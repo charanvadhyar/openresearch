@@ -16,7 +16,6 @@ always knows what's happening and why.
 """
 
 import asyncio
-import json
 import logging
 import os
 import re
@@ -47,7 +46,7 @@ from autoresearch.agents.api_utils import PromptBudget
 
 logger = logging.getLogger(__name__)
 
-MAX_RETRIES = 2  # Per method. After this, mark as failed and move on.
+MAX_RETRIES = 3  # Per method. After this, mark as failed and move on.
 MAX_PARALLEL_KERNELS = 4
 MAX_GPU_KERNELS = 2
 KAGGLE_API_MAX_RETRIES = 3
@@ -55,7 +54,7 @@ KAGGLE_API_BACKOFF_SECONDS = 5
 KERNEL_TIMEOUT_SECONDS = 7200
 
 
-# â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 def _notebook_source(notebook) -> str:
     """
@@ -73,13 +72,12 @@ def _notebook_source(notebook) -> str:
         src = cell.get("source", "")
         if isinstance(src, list):
             src = "".join(src)
-        lines.append(f"# -- Cell {code_idx} ------------------------------")
+        lines.append(f"# â”€â”€ Cell {code_idx} â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€")
         lines.append(src.strip())
         lines.append("")
     return "\n".join(lines)
 
 
-# â”€â”€ Retry prompt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 FIX_PROMPT_TEMPLATE = """\
 The notebook for '{method_name}' failed on Kaggle with this error:
@@ -108,17 +106,6 @@ and rewrite them to fix the problem. Common causes:
 - Memory error (reduce batch size or n_estimators)
 
 Return the fixed notebook code sections as JSON (same format as before).
-"""
-
-
-FIX_PROMPT_EXTRA_RULES = """\
-Additional strict requirements for the fix:
-- Keep all required output variables: primary_metric_value, primary_metric_name, all_metrics, train_metric, val_metric, runtime_seconds, method_name
-- Ensure metrics are saved to /kaggle/working/metrics.json
-- Ensure a model artifact is saved to /kaggle/working/model.pkl (or equivalent model file)
-- If target column may be wrong, infer from dataframe columns and validate before training
-- If split logic fails, regenerate train/val split with shape checks before fitting
-- Add defensive checks with clear error messages for missing columns and empty features
 """
 
 
@@ -155,50 +142,6 @@ def diagnose_error(error_message: str, log_tail: str) -> str:
     return "An unexpected error occurred. Check the full traceback above."
 
 
-def _actionable_log_tail(log_tail: str, limit_lines: int = 120) -> str:
-    """
-    Keep the most actionable traceback chunks and trim noisy output.
-    """
-    if not log_tail:
-        return ""
-    lines = [ln.rstrip() for ln in log_tail.splitlines() if ln.strip()]
-    if not lines:
-        return ""
-    error_lines = []
-    capture = False
-    for ln in lines:
-        low = ln.lower()
-        if "traceback (most recent call last)" in low:
-            capture = True
-        if capture:
-            error_lines.append(ln)
-        if re.search(r"\b([A-Za-z_][A-Za-z0-9_]*Error|Exception)\b", ln):
-            error_lines.append(ln)
-    selected = error_lines if error_lines else lines[-limit_lines:]
-    return "\n".join(selected[-limit_lines:])
-
-
-def _notebook_minimum_contract_issues(notebook) -> list[str]:
-    """
-    Lightweight static checks before pushing a retry notebook.
-    """
-    code = _notebook_source(notebook)
-    issues = []
-    required_tokens = [
-        "primary_metric_value",
-        "primary_metric_name",
-        "train_metric",
-        "val_metric",
-        "metrics.json",
-    ]
-    for token in required_tokens:
-        if token not in code:
-            issues.append(f"missing token: {token}")
-    if "/kaggle/working" not in code and "OUTPUT_DIR" not in code:
-        issues.append("missing output path handling")
-    return issues
-
-
 class ExecutionAgent:
     """
     The Execution Agent.
@@ -221,95 +164,6 @@ class ExecutionAgent:
         self.codegen  = codegen_agent
         self.verbose  = verbose
 
-    def _extract_metrics(self, output, method: MethodSpec) -> dict:
-        """
-        Robust metrics extraction from KernelOutput, tolerant to schema drift.
-        """
-        metrics = output.metrics_json or {}
-        if metrics:
-            return metrics
-
-        # Fallback: inspect any JSON file for likely metric keys.
-        for name, blob in (output.files or {}).items():
-            if not str(name).lower().endswith(".json"):
-                continue
-            try:
-                text = blob.decode(errors="replace") if isinstance(blob, (bytes, bytearray)) else str(blob)
-                obj = json.loads(text)
-                if isinstance(obj, dict) and (
-                    "primary_value" in obj
-                    or "primary_metric" in obj
-                    or "all_metrics" in obj
-                    or "metrics" in obj
-                ):
-                    return obj
-            except Exception:
-                continue
-        return {}
-
-    def _normalize_metrics_fields(self, raw: dict, method: MethodSpec) -> tuple[Optional[float], str, dict, Optional[float], Optional[float]]:
-        """
-        Normalize common metric key variants from different generated notebooks.
-        """
-        all_metrics = raw.get("all_metrics")
-        if all_metrics is None and isinstance(raw.get("metrics"), dict):
-            all_metrics = raw.get("metrics")
-        if all_metrics is None:
-            all_metrics = {}
-
-        primary_name = (
-            raw.get("primary_metric")
-            or raw.get("primary_metric_name")
-            or raw.get("metric_name")
-            or method.id
-        )
-        primary_value = (
-            raw.get("primary_value")
-            if raw.get("primary_value") is not None else
-            raw.get("primary_metric_value")
-        )
-        if primary_value is None and isinstance(all_metrics, dict) and primary_name in all_metrics:
-            primary_value = all_metrics.get(primary_name)
-        if primary_value is None and isinstance(all_metrics, dict) and len(all_metrics) == 1:
-            primary_name = next(iter(all_metrics.keys()))
-            primary_value = all_metrics.get(primary_name)
-
-        train_metric = raw.get("train_metric")
-        if train_metric is None:
-            train_metric = raw.get("train_score")
-        val_metric = raw.get("val_metric")
-        if val_metric is None:
-            val_metric = raw.get("validation_metric")
-        if val_metric is None:
-            val_metric = raw.get("val_score")
-
-        try:
-            primary_value = float(primary_value) if primary_value is not None else None
-        except Exception:
-            primary_value = None
-        try:
-            train_metric = float(train_metric) if train_metric is not None else None
-        except Exception:
-            train_metric = None
-        try:
-            val_metric = float(val_metric) if val_metric is not None else None
-        except Exception:
-            val_metric = None
-
-        # Ensure all_metrics is numeric-friendly dict.
-        if isinstance(all_metrics, dict):
-            cleaned = {}
-            for k, v in all_metrics.items():
-                try:
-                    cleaned[str(k)] = float(v)
-                except Exception:
-                    continue
-            all_metrics = cleaned
-        else:
-            all_metrics = {}
-
-        return primary_value, str(primary_name), all_metrics, train_metric, val_metric
-
     async def run_all(
         self,
         spec: ProblemSpec,
@@ -326,9 +180,9 @@ class ExecutionAgent:
         will skip them and the researcher is told what happened.
         """
         if self.verbose:
-            print("\n" + "=" * 60)
-            print("RUNNING EXPERIMENTS")
-            print("=" * 60)
+            print("\n" + "━" * 60)
+            print("🚀 RUNNING EXPERIMENTS")
+            print("━" * 60)
             print(f"\n  Pushing {len(method_notebooks)} experiments to Kaggle...")
             print("  They will run in parallel with controlled concurrency.\n")
 
@@ -367,17 +221,14 @@ class ExecutionAgent:
                         push.kernel_slug,
                         method_name=method.name,
                     )
-                    wait_error_detail = ""
                 except Exception as e:
                     logger.warning(f"Kernel wait failed for {method.name}: {e}")
                     poll = None
-                    wait_error_detail = str(e)
 
                 if poll is None:
                     return await self._handle_failure_with_retry(
                         spec, report, method, push, notebook,
                         dataset_sources, competition_sources,
-                        initial_error_context=wait_error_detail,
                     )
                 return await self._collect_result(method, push, poll)
 
@@ -391,49 +242,6 @@ class ExecutionAgent:
             self._print_execution_summary(results)
 
         return results
-
-    async def _api_call_with_backoff(self, call, *args, **kwargs):
-        """Run blocking Kaggle API calls with bounded retries and backoff."""
-        last_error = None
-        for attempt in range(1, KAGGLE_API_MAX_RETRIES + 1):
-            try:
-                return await asyncio.to_thread(call, *args, **kwargs)
-            except Exception as e:
-                last_error = e
-                if attempt == KAGGLE_API_MAX_RETRIES:
-                    break
-                delay = KAGGLE_API_BACKOFF_SECONDS * attempt
-                logger.warning(
-                    f"Kaggle API call failed (attempt {attempt}/{KAGGLE_API_MAX_RETRIES}): {e}. "
-                    f"Retrying in {delay}s."
-                )
-                await asyncio.sleep(delay)
-        raise last_error
-
-    async def _push_kernel_with_backoff(self, **kwargs):
-        """Push kernel with retry/backoff."""
-        return await self._api_call_with_backoff(self.kaggle.push_kernel, **kwargs)
-
-    async def _wait_for_kernel_with_timeout(self, kernel_slug: str, method_name: str):
-        """Wait for kernel completion with timeout protection."""
-        last_error = None
-        for attempt in range(1, KAGGLE_API_MAX_RETRIES + 1):
-            try:
-                return await asyncio.wait_for(
-                    self.kaggle.wait_for_kernel(kernel_slug, method_name=method_name),
-                    timeout=KERNEL_TIMEOUT_SECONDS,
-                )
-            except Exception as e:
-                last_error = e
-                if attempt == KAGGLE_API_MAX_RETRIES:
-                    break
-                delay = KAGGLE_API_BACKOFF_SECONDS * attempt
-                logger.warning(
-                    f"Kernel wait failed (attempt {attempt}/{KAGGLE_API_MAX_RETRIES}) for "
-                    f"{method_name}: {e}. Retrying in {delay}s."
-                )
-                await asyncio.sleep(delay)
-        raise last_error
     async def _collect_result(
         self,
         method: MethodSpec,
@@ -444,11 +252,8 @@ class ExecutionAgent:
         start = time.time()
 
         try:
-            output = await self._api_call_with_backoff(self.kaggle.fetch_output, push.kernel_slug)
-            raw_metrics = self._extract_metrics(output, method)
-            primary_value, primary_name, all_metrics, train_metric, val_metric = self._normalize_metrics_fields(
-                raw_metrics, method
-            )
+            output = self.kaggle.fetch_output(push.kernel_slug)
+            metrics = output.metrics_json or {}
 
             # Find model artifact
             model_files = [
@@ -465,6 +270,9 @@ class ExecutionAgent:
                     requirements=[],
                 )
 
+            primary_value = metrics.get("primary_value")
+            primary_name  = metrics.get("primary_metric", method.id)
+
             return ExecutionResult(
                 method_id=method.id,
                 method_name=method.name,
@@ -474,17 +282,11 @@ class ExecutionAgent:
                 gpu_used=method.requires_gpu,
                 primary_metric_value=primary_value,
                 primary_metric_name=primary_name,
-                all_metrics=all_metrics,
-                train_metric=train_metric,
-                val_metric=val_metric,
+                all_metrics=metrics.get("all_metrics", {}),
+                train_metric=metrics.get("train_metric"),
+                val_metric=metrics.get("val_metric"),
                 model_artifact=artifact,
-                results_plain_english=self._explain_results(method, {
-                    "primary_value": primary_value,
-                    "primary_metric": primary_name,
-                    "all_metrics": all_metrics,
-                    "train_metric": train_metric,
-                    "val_metric": val_metric,
-                }),
+                results_plain_english=self._explain_results(method, metrics),
             )
 
         except Exception as e:
@@ -503,7 +305,6 @@ class ExecutionAgent:
         notebook,
         dataset_sources: list[str],
         competition_sources: list[str],
-        initial_error_context: str = "",
     ) -> ExecutionResult:
         """
         When a kernel fails, read the error, ask CodeGen to fix it,
@@ -514,16 +315,12 @@ class ExecutionAgent:
         kernel_slug = push.kernel_slug
 
         for attempt in range(1, MAX_RETRIES + 1):
-            if attempt == 1 and initial_error_context:
-                error_msg = f"Kernel failed (attempt {attempt}): {initial_error_context}"
-            else:
-                error_msg = f"Kernel failed (attempt {attempt})"
+            error_msg = f"Kernel failed (attempt {attempt})"
             log_tail  = self._get_kernel_error_log(kernel_slug)
-            log_tail  = _actionable_log_tail(log_tail)
             diagnosis = diagnose_error(error_msg, log_tail)
 
             if self.verbose:
-                print(f"\n  âš ï¸  '{method.name}' failed (attempt {attempt}/{MAX_RETRIES})")
+                print(f"\n    '{method.name}' failed (attempt {attempt}/{MAX_RETRIES})")
                 print(f"     {diagnosis}")
                 print(f"     AutoResearch is fixing the code and retrying...\n")
 
@@ -535,7 +332,7 @@ class ExecutionAgent:
                 past_fixes = recall(full_error)
                 memory_section = format_for_prompt(past_fixes)
                 if past_fixes and self.verbose:
-                    print(f"  ðŸ§  Memory: found {len(past_fixes)} similar past fix(es) â€” injecting into prompt")
+                    print(f"    Memory: found {len(past_fixes)} similar past fix(es) â€” injecting into prompt")
 
                 # Extract full source of the notebook that just failed
                 nb_code = _notebook_source(notebook)
@@ -558,7 +355,6 @@ class ExecutionAgent:
                     plain_english_diagnosis=diagnosis,
                     notebook_code=fitted["code"],
                 )
-                fix_prompt = fix_prompt + "\n\n" + FIX_PROMPT_EXTRA_RULES
                 if fitted["memory"]:
                     fix_prompt = fitted["memory"] + "\n\n" + fix_prompt
 
@@ -566,20 +362,8 @@ class ExecutionAgent:
                     spec, report, method, error_context=fix_prompt
                 )
 
-                contract_issues = _notebook_minimum_contract_issues(fixed_notebook)
-                if contract_issues:
-                    logger.warning(
-                        f"Generated fix for {method.name} is incomplete: {contract_issues}"
-                    )
-                    retry_changes.append(
-                        "Validation failed before push: " + "; ".join(contract_issues)
-                    )
-                    mark_failed(full_error, fix_prompt)
-                    notebook = fixed_notebook
-                    continue
-
                 # Push the fixed notebook
-                new_push = await self._push_kernel_with_backoff(
+                new_push = self.kaggle.push_kernel(
                     notebook=fixed_notebook,
                     kernel_slug_suffix=f"{method.id}-retry{attempt}",
                     dataset_sources=dataset_sources,
@@ -588,7 +372,7 @@ class ExecutionAgent:
                 )
 
                 # Wait for it
-                poll = await self._wait_for_kernel_with_timeout(
+                poll = await self.kaggle.wait_for_kernel(
                     new_push.kernel_slug,
                     method_name=f"{method.name} (retry {attempt})",
                 )
@@ -596,13 +380,13 @@ class ExecutionAgent:
                 # If it worked, collect and return â€” store fix in memory
                 remember(full_error, fix_prompt, worked=True)
                 if self.verbose:
-                    print(f"  ðŸ§  Memory: fix worked â€” stored for future runs")
+                    print(f"    Memory: fix worked â€” stored for future runs")
                 result = await self._collect_result(method, new_push, poll)
                 result.retry_count   = attempt
                 result.retry_changes = retry_changes
                 return result
 
-            except (KernelExecutionError, KernelTimeoutError, asyncio.TimeoutError) as e:
+            except (KernelExecutionError, KernelTimeoutError) as e:
                 logger.warning(f"Retry {attempt} also failed for {method.name}: {e}")
                 mark_failed(full_error, fix_prompt)
                 # Use the fixed notebook as the base for the next retry attempt
@@ -616,7 +400,7 @@ class ExecutionAgent:
 
         # All retries exhausted
         if self.verbose:
-            print(f"\n  âŒ '{method.name}' failed after {MAX_RETRIES} attempts.")
+            print(f"\n   '{method.name}' failed after {MAX_RETRIES} attempts.")
             print(f"     AutoResearch will continue with the other methods.")
             print(f"     You can inspect the kernel at: {push.kernel_url}\n")
 
@@ -764,18 +548,18 @@ class ExecutionAgent:
         successes = [r for r in results if r.status == ExecutionStatus.SUCCESS]
         failures  = [r for r in results if r.status == ExecutionStatus.FAILED]
 
-        print("\n" + "â”" * 60)
-        print("ðŸ“Š EXECUTION SUMMARY")
-        print("â”" * 60)
+        print("\n" + "" * 60)
+        print(" EXECUTION SUMMARY")
+        print("" * 60)
         print(f"\n  {len(successes)}/{len(results)} experiments completed successfully\n")
 
         for r in successes:
             metric_str = f"{r.primary_metric_name} = {r.primary_metric_value:.4f}" if r.primary_metric_value else "no metrics"
-            print(f"  âœ… {r.method_name}: {metric_str}")
+            print(f"  {r.method_name}: {metric_str}")
             if r.results_plain_english:
                 print(f"     {r.results_plain_english[:120]}")
 
         for r in failures:
-            print(f"\n  âŒ {r.method_name}: {r.error_plain_english}")
+            print(f"\n   {r.method_name}: {r.error_plain_english}")
 
-        print("â”" * 60 + "\n")
+        print(" " * 60 + "\n")

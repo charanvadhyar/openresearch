@@ -21,6 +21,7 @@ from autoresearch.schemas import (
     MethodsCatalog,
     ExecutionResult,
     EvaluationReport,
+    DataPrepReport,
 )
 
 
@@ -107,6 +108,7 @@ class GlobalState(BaseModel):
     # ── Agent outputs (populated as the run progresses) ────────────────────
     problem_spec:      Optional[ProblemSpec]      = None
     data_health:       Optional[DataHealthReport] = None
+    data_prep:         Optional[DataPrepReport]   = None
     methods_catalog:   Optional[MethodsCatalog]   = None
     execution_results: list[ExecutionResult]       = Field(default_factory=list)
     evaluation_report: Optional[EvaluationReport] = None

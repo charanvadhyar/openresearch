@@ -11,6 +11,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from .dataset_diagnostics import DatasetDiagnosticsReport
+from .data_prep import DataPrepReport
 
 
 class TaskType(str, Enum):
@@ -129,6 +130,10 @@ class ProblemSpec(BaseModel):
     dataset_diagnostics: Optional[DatasetDiagnosticsReport] = Field(
         None,
         description="Pre-planning diagnostics for dataset quality and risks.",
+    )
+    data_prep: Optional[DataPrepReport] = Field(
+        None,
+        description="Lightweight data preparation guidance derived from EDA.",
     )
 
     # ── Constraints ────────────────────────────────────────────────────────
